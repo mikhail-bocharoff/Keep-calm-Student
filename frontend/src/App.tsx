@@ -1,21 +1,5 @@
-import {
-  Check,
-  Flame,
-  Heart,
-  Home,
-  Leaf,
-  MessageCircle,
-  Music,
-  PawPrint,
-  Play,
-  Send,
-  Settings,
-  Sparkles,
-  Star,
-  Timer,
-  Trophy,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Edit3, Flame, Leaf, PawPrint, Play, Send, Sparkles, Timer } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { API_URL, api, ChatMessage as Message } from "./api/client";
 import dreamscape from "./assets/otdohnii-dreamscape.png";
@@ -32,7 +16,7 @@ type Progress = {
 const initialMessages: Message[] = [
   {
     role: "assistant",
-    content: "Привет. Напиши, что сейчас происходит: усталость, дедлайн, тревога или ступор. Я помогу выбрать самый мягкий следующий шаг.",
+    content: "Привет. Напиши, что сейчас происходит: усталость, апатия, тревога или ступор. Я помогу выбрать самый мягкий следующий шаг.",
   },
 ];
 
@@ -51,20 +35,11 @@ function StatLine({ icon, label, value, color }: { icon: ReactNode; label: strin
   );
 }
 
-function GlassButton({ children, onClick, tone = "violet" }: { children: ReactNode; onClick?: () => void; tone?: string }) {
-  return (
-    <button className={`glass-button ${tone}`} onClick={onClick}>
-      {children}
-    </button>
-  );
-}
-
 export default function App() {
   const [userId, setUserId] = useState(localStorage.getItem("otdohnii_user_id") || localStorage.getItem("focusfloat_user_id") || "");
   const [appName, setAppName] = useState(import.meta.env.VITE_APP_NAME || "ОтдохнИИ");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
-  const [emotionalState, setEmotionalState] = useState<any>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [focusRound, setFocusRound] = useState<any>(null);
   const [focusResult, setFocusResult] = useState("");
@@ -79,14 +54,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [startupError, setStartupError] = useState("");
   const [activeRest, setActiveRest] = useState<{ ritualId?: string; title: string; minutes: number } | null>(null);
-  const [musicEnabled, setMusicEnabled] = useState(false);
-  const audioRef = useRef<{ context: AudioContext; oscillator: OscillatorNode; gain: GainNode } | null>(null);
-  const [settings, setSettings] = useState({
-    current_topic: "Макроэкономика: инфляция",
-    current_task: "Подготовиться к семинару",
-    deadline_text: "через 2 дня",
-    energy_score: 4,
-  });
 
   useEffect(() => {
     api.health().then((data) => setAppName(data.app_name)).catch(() => undefined);
@@ -100,10 +67,13 @@ export default function App() {
           setUserId(user.user_id);
           setStartupError("");
         })
-        .catch(() => {
-          setStartupError(`Не получается подключиться к backend: ${API_URL}`);
-        });
+        .catch(() => setStartupError(`Не получается подключиться к backend: ${API_URL}`));
     }
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    api.getProgress(userId).then(setProgress).catch(() => undefined);
   }, [userId]);
 
   async function retryStartup() {
@@ -117,36 +87,6 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
-    if (!userId) return;
-    api.getProgress(userId).then(setProgress).catch(() => undefined);
-    api.getState(userId)
-      .then((state) =>
-        setSettings({
-          current_topic: state.current_topic || "Макроэкономика: инфляция",
-          current_task: state.current_task || "Подготовиться к семинару",
-          deadline_text: state.deadline_text || "через 2 дня",
-          energy_score: state.energy_score ?? 4,
-        }),
-      )
-      .catch(() => undefined);
-  }, [userId]);
-
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.oscillator.stop();
-        audioRef.current.context.close();
-      }
-    };
-  }, []);
-
-  const energy = emotionalState ? Math.max(8, 100 - emotionalState.overload_score * 9) : 68;
-  const restMinutes = progress ? Math.min(60, progress.completed_rituals * 15) : 45;
-  const microActions = progress ? Math.max(1, progress.completed_focus_rounds) : 2;
-
-  const lastAssistant = useMemo(() => [...messages].reverse().find((message) => message.role === "assistant"), [messages]);
-
   async function refreshProgress() {
     if (!userId) return;
     setProgress(await api.getProgress(userId));
@@ -154,7 +94,7 @@ export default function App() {
 
   function showNote(message: string) {
     setRitualNote(message);
-    window.setTimeout(() => setRitualNote((current) => (current === message ? "" : current)), 7000);
+    window.setTimeout(() => setRitualNote((current) => (current === message ? "" : current)), 6500);
   }
 
   async function sendMessage(text = input) {
@@ -166,27 +106,12 @@ export default function App() {
     setIsSending(true);
     try {
       const response = await api.sendMessage(userId, clean);
-      setEmotionalState(response.emotional_state);
       setMessages((items) => [...items, { role: "assistant", content: response.reply }]);
     } catch {
-      setError("Чат не смог получить ответ. Проверь backend и LLM-настройки в /api/health.");
+      setError("Чат не смог получить ответ. Проверь backend и /api/health/llm.");
       setMessages((items) => [...items, { role: "assistant", content: "Я не смог получить ответ от сервера. Проверь, что backend запущен и нейросеть подключена." }]);
     } finally {
       setIsSending(false);
-    }
-  }
-
-  async function saveSettings() {
-    if (!userId) return;
-    setBusyAction("settings");
-    setError("");
-    try {
-      await api.saveState({ user_id: userId, ...settings, energy_score: Number(settings.energy_score) });
-      showNote("Контекст сохранён. Теперь чат и фокус-раунды будут точнее попадать в твою реальную задачу.");
-    } catch {
-      setError("Не получилось сохранить настройки. Проверь, что backend запущен.");
-    } finally {
-      setBusyAction("");
     }
   }
 
@@ -205,26 +130,16 @@ export default function App() {
     }
   }
 
-  async function startShortRest(minutes = 10, title = "Короткий отдых") {
-    setActiveRest({ title, minutes });
-    showNote(`${title} запущен. Сейчас задача простая: ${minutes} минут без учебной вины.`);
-  }
-
   async function completeRest() {
-    if (!userId || !activeRest) return;
+    if (!userId || !activeRest?.ritualId) return;
     setBusyAction("rest-complete");
-    setError("");
     try {
-      if (activeRest.ritualId) {
-        const response = await api.completeRitual(userId, activeRest.ritualId);
-        showNote(response.message);
-        await refreshProgress();
-      } else {
-        showNote("Отдых засчитан для тебя, даже если в прогресс он не записан. Теперь можно выбрать один маленький шаг.");
-      }
+      const response = await api.completeRitual(userId, activeRest.ritualId);
+      showNote(response.message);
       setActiveRest(null);
+      await refreshProgress();
     } catch {
-      setError("Не получилось завершить ритуал. Попробуй ещё раз.");
+      setError("Не получилось завершить ритуал.");
     } finally {
       setBusyAction("");
     }
@@ -239,9 +154,9 @@ export default function App() {
       setFocusRound(round);
       setFocusResult("");
       setMicroStepDone(false);
-      showNote("Фокус-раунд готов. Победа считается маленькой, даже если получилось неидеально.");
+      showNote("Фокус-раунд готов. Сделай любой маленький след за 10 минут.");
     } catch {
-      setError("Не получилось создать фокус-раунд. Проверь, что нейросеть и backend доступны.");
+      setError("Не получилось создать фокус-раунд.");
     } finally {
       setBusyAction("");
     }
@@ -250,14 +165,13 @@ export default function App() {
   async function completeFocus() {
     if (!userId || !focusRound) return;
     setBusyAction("focus-complete");
-    setError("");
     try {
       const response = await api.completeFocus(userId, focusRound.focus_round_id, focusResult || "Сделал один маленький шаг");
-      showNote(response.message);
       setMicroStepDone(true);
+      showNote(response.message);
       await refreshProgress();
     } catch {
-      setError("Не получилось завершить фокус-раунд. Попробуй ещё раз.");
+      setError("Не получилось завершить фокус-раунд.");
     } finally {
       setBusyAction("");
     }
@@ -266,7 +180,7 @@ export default function App() {
   async function feedAnxiety() {
     if (!userId) return;
     if (!anxietyText.trim()) {
-      showNote("Напиши тревожную мысль в поле. Даже грубо и с ошибками можно.");
+      showNote("Напиши тревожную мысль в поле. Одной фразы достаточно.");
       return;
     }
     setBusyAction("anxiety");
@@ -276,7 +190,7 @@ export default function App() {
       setAnxietyResult(response.rewritten_text);
       showNote(response.message);
     } catch {
-      setError("Не получилось переписать тревогу. Проверь LLM-настройки.");
+      setError("Не получилось переписать тревогу.");
     } finally {
       setBusyAction("");
     }
@@ -285,8 +199,7 @@ export default function App() {
   async function burnTask() {
     if (!userId) return;
     if (!taskText.trim()) {
-      showNote("Сначала напиши страшную задачу в поле ниже. Одной фразы достаточно.");
-      window.location.hash = "task-burner";
+      showNote("Напиши страшную задачу в поле. Можно совсем коротко.");
       return;
     }
     setBusyAction("task");
@@ -296,40 +209,10 @@ export default function App() {
       setTaskSteps(response.micro_steps);
       showNote(response.message);
     } catch {
-      setError("Не получилось разбить задачу. Проверь LLM-настройки и backend.");
+      setError("Не получилось разбить задачу.");
     } finally {
       setBusyAction("");
     }
-  }
-
-  function toggleAmbientFocus() {
-    if (audioRef.current) {
-      audioRef.current.oscillator.stop();
-      audioRef.current.context.close();
-      audioRef.current = null;
-      setMusicEnabled(false);
-      showNote("Фоновый звук выключен.");
-      return;
-    }
-
-    const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtor) {
-      showNote("Браузер не поддерживает встроенный фоновый звук.");
-      return;
-    }
-
-    const context = new AudioCtor();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = 174;
-    gain.gain.value = 0.035;
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    audioRef.current = { context, oscillator, gain };
-    setMusicEnabled(true);
-    showNote("Включил тихий фоновый тон для фокуса. Его можно выключить той же кнопкой.");
   }
 
   if (!userId) {
@@ -340,7 +223,7 @@ export default function App() {
         {startupError && (
           <div className="startup-error">
             <span>{startupError}</span>
-            <small>Проверь, что backend на Render задеплоен, отвечает на /api/health и пускает Vercel-домен.</small>
+            <small>Проверь, что backend отвечает на /api/health и пускает Vercel-домен.</small>
             <button onClick={retryStartup}>Повторить</button>
           </div>
         )}
@@ -348,43 +231,38 @@ export default function App() {
     );
   }
 
+  const focusPercent = progress?.completed_focus_rounds ? Math.min(100, progress.completed_focus_rounds * 25) : 50;
+  const restPercent = progress?.completed_rituals ? Math.min(100, progress.completed_rituals * 25) : 50;
+  const microPercent = progress?.rest_shards ? Math.min(100, progress.rest_shards * 10) : 50;
+
   return (
     <main className="app-shell">
-      <div className="aurora aurora-one" />
-      <div className="aurora aurora-two" />
       <section className="workspace">
         <header className="topbar">
           <div className="brand">
             <div className="brand-mark">
-              <PawPrint size={30} />
+              <PawPrint size={24} />
             </div>
             <div>
               <h1>{appName}</h1>
-              <p>Отдых легален. Фокус возвращается мягко.</p>
+              <p>Отдых не лень: фокус возвращается мягко.</p>
             </div>
           </div>
-          <nav className="soft-nav" aria-label="Разделы приложения">
-            <a href="#home"><Home size={19} /> Главная</a>
-            <a href="#chat"><MessageCircle size={19} /> Чат</a>
-            <a href="#rituals"><Heart size={19} /> Ритуалы</a>
-            <a href="#progress"><Trophy size={19} /> Прогресс</a>
-            <a href="#settings"><Settings size={19} /> Настройки</a>
-          </nav>
-          <div className="top-pills">
-            <span><Star size={17} /> Сегодня ты молодец</span>
-            <span><Flame size={17} /> {progress?.rest_shards ?? 0} осколков</span>
+          <div className="shard-pill">
+            <Flame size={16} />
+            <strong>{progress?.rest_shards ?? 0} осколков</strong>
           </div>
         </header>
 
-        <div className="dashboard" id="home">
-          <section className="hero-card" id="chat">
+        <div className="dashboard">
+          <section className="hero-card chat-panel">
             <div className="hero-copy">
               <p className="eyebrow">бережный режим включён</p>
               <h2>Привет. Я здесь, чтобы помочь тебе выдохнуть и не сдаваться.</h2>
-              <p>Напиши честно, как ты сейчас. Всё принимается: усталость, дедлайн, тревога, тупняк, “я опять ничего”.</p>
+              <p>Напиши честно, как ты сейчас. Всё принимается: усталость, желание, тревога, тупик, «я опять ничего».</p>
               <div className="mood-row">
                 {moodChips.map((chip) => (
-                  <button key={chip} onClick={() => sendMessage(chip === "Спокойно" ? "Я чуть спокойнее и могу попробовать 10 минут" : `Мне сейчас ${chip.toLowerCase()}`)}>
+                  <button key={chip} onClick={() => sendMessage(chip === "Спокойно" ? "Я спокоен и могу попробовать маленький шаг" : `Мне сейчас ${chip.toLowerCase()}`)}>
                     {chip}
                   </button>
                 ))}
@@ -395,14 +273,12 @@ export default function App() {
               <div className="message-stack">
                 {messages.slice(-4).map((message, index) => (
                   <div key={`${message.role}-${index}`} className={`bubble ${message.role}`}>
-                    {message.role === "assistant" && <span className="bubble-avatar">♡</span>}
                     <p>{message.content}</p>
                   </div>
                 ))}
                 {isSending && (
                   <div className="bubble assistant">
-                    <span className="bubble-avatar">♡</span>
-                    <p>Собираю ответ. Без спешки, но уже думаю.</p>
+                    <p>Собираю ответ. Уже думаю.</p>
                   </div>
                 )}
               </div>
@@ -411,165 +287,111 @@ export default function App() {
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && sendMessage()}
-                  placeholder="Напиши честно: что чувствуешь, что мешает, что нужно сейчас?"
+                  placeholder="Напиши, что у тебя на уме..."
                 />
                 <button onClick={() => sendMessage()} title="Отправить" disabled={isSending || !input.trim()}>
-                  <Send size={22} />
+                  <Send size={21} />
                 </button>
               </div>
               {error && <p className="inline-error">{error}</p>}
-            </div>
-
-            <div className="tiny-note">
-              <Star size={18} />
-              <span>{lastAssistant?.content || "Здесь нет оценок и правил. Только мягкий следующий шаг."}</span>
             </div>
           </section>
 
           <section className="rhythm-card">
             <h3>Сегодняшний ритм</h3>
-            <div className="energy-ring" style={{ "--energy": `${energy}%` } as CSSProperties}>
+            <div className="energy-ring" style={{ "--energy": `${focusPercent}%` } as CSSProperties}>
               <div>
-                <strong>{energy}%</strong>
-                <span>энергии</span>
+                <strong>{focusPercent}%</strong>
+                <span>нейтрально</span>
               </div>
             </div>
             <div className="rhythm-list">
-              <StatLine icon={<Timer size={18} />} label="Фокус" value={`${Math.min(95, microActions * 28)}%`} color="#51c88b" />
-              <StatLine icon={<Leaf size={18} />} label="Отдых" value={`${Math.min(95, restMinutes)}%`} color="#8b7cf6" />
-              <StatLine icon={<Star size={18} />} label="Микрошаги" value={`${Math.min(95, microActions * 34)}%`} color="#ffb454" />
+              <StatLine icon={<Flame size={16} />} label="Фокус" value={`${focusPercent}%`} color="#43c991" />
+              <StatLine icon={<Leaf size={16} />} label="Отдых" value={`${restPercent}%`} color="#4ba9ef" />
+              <StatLine icon={<Sparkles size={16} />} label="Микрошаги" value={`${microPercent}%`} color="#f1a72f" />
             </div>
-            <p>Ты уже сделал(а) много. Маленькими шагами — к большому результату.</p>
+            <p>Ты уже двигаешься мягко. Маленькими шагами — к большому результату.</p>
           </section>
 
-          <section className="step-card">
-            <h3><Flame size={22} /> Микрошаг дня</h3>
-            <p>{focusRound?.task_text || "Открой конспект и выдели 1 главную мысль. Не идеально. Просто одну."}</p>
-            <span className="duration-pill"><Timer size={16} /> 2-10 мин</span>
-            <button onClick={startFocus} className="primary-action">
-              {busyAction === "focus" ? "Готовлю шаг..." : "Сделать шаг"} <Check size={24} />
-            </button>
-          </section>
-
-          <aside className="art-panel">
-            <img src={dreamscape} alt="Студентка у окна делает мягкий учебный шаг рядом с сонным котёнком" />
-          </aside>
-
-          <section className="mode-card rituals" id="rituals">
-            <div>
-              <h3>Ритуалы</h3>
-              <p>Мягкие практики для фокуса и спокойствия</p>
-            </div>
-            <GlassButton onClick={startCatMode}>{busyAction === "cat" ? "Запускаю..." : "Кошачий режим"}</GlassButton>
-            {activeRest && (
-              <div className="mini-timer">
-                <span>{activeRest.title}</span>
-                <FocusTimer minutes={activeRest.minutes} active />
-                <button onClick={completeRest} disabled={busyAction === "rest-complete"}>
-                  {busyAction === "rest-complete" ? "Засчитываю..." : "Завершить отдых"}
-                </button>
-              </div>
-            )}
-          </section>
-
-          <section className="mode-card rest">
-            <div>
-              <h3>10 минут отдыха</h3>
-              <p>Короткая пауза без учебной вины. После неё можно вернуться к одному микрошагу.</p>
-            </div>
-            <button onClick={() => startShortRest(10, "10 минут отдыха")} className="round-play" title="Начать отдых"><Play size={24} fill="currentColor" /></button>
-          </section>
-
-          <section className="mode-card anxiety">
-            <div>
-              <h3>Пожиратель тревоги</h3>
-              <p>Выгрузи тревогу — пусть он её съест и станет легче</p>
-            </div>
-            <textarea value={anxietyText} onChange={(event) => setAnxietyText(event.target.value)} placeholder="Я всё завалю..." />
-            <GlassButton tone="coral" onClick={feedAnxiety}>{busyAction === "anxiety" ? "Переписываю..." : "Скормить"}</GlassButton>
-            {anxietyResult && <p className="soft-result">{anxietyResult}</p>}
-          </section>
-
-          <section className="how-card">
-            <h3>Как пользоваться</h3>
-            {["Напиши честно, как ты себя чувствуешь", "Выбери мягкий режим: чат, ритуал или 10 минут", "Сделай один микрошаг", "Возвращайся без чувства вины"].map((item, index) => (
-              <div className="how-line" key={item}>
-                <span>{index + 1}</span>
-                <p>{item}</p>
-              </div>
-            ))}
-          </section>
-
-          <section className="quick-strip">
-            <h3>Быстрые действия</h3>
-            <button onClick={startCatMode}><PawPrint /> Кошачий режим <small>мягкая поддержка</small></button>
-            <button onClick={burnTask}><Flame /> Сжечь задачу <small>выплесни напряжение</small></button>
-            <button onClick={() => startShortRest(3, "Короткая медитация")}><Leaf /> Короткая медитация <small>3 минуты тишины</small></button>
-            <button onClick={startFocus}><Star /> Правило 1% <small>сделай чуть-чуть</small></button>
-            <button onClick={toggleAmbientFocus}><Music /> Музыка для фокуса <small>{musicEnabled ? "выключить фон" : "включить тихий фон"}</small></button>
-          </section>
-
-          <section className="focus-card">
-            <h3><Timer size={22} /> Таймер отдыха</h3>
-            {activeRest ? <FocusTimer minutes={activeRest.minutes} active /> : <strong>10:00</strong>}
-            <p>{activeRest ? activeRest.title : "без чувства вины"}</p>
-            <button onClick={() => startShortRest(10, "Таймер отдыха")}><Play size={28} fill="currentColor" /></button>
-          </section>
-
-          <section className="progress-card" id="progress">
-            <h3>Сонный котёнок сопит рядом с прогрессом</h3>
-            <div className="kitten-row">
-              <div className="kitten-orb">♡</div>
-              <div>
-                <strong>Уровень {progress?.sleepy_kitten_level ?? 0}</strong>
-                <p>{progress?.rest_shards ?? 0} осколков отдыха, {progress?.sleepy_kitten_progress ?? 0}% до следующего уровня</p>
-              </div>
-            </div>
-          </section>
-
-          <section className="task-burner-card" id="task-burner">
+          <section className="task-burner-card top-task-card">
             <h3>Сжечь страшную задачу</h3>
-            <textarea value={taskText} onChange={(event) => setTaskText(event.target.value)} placeholder="Мне надо начать курсовую, но я не понимаю с чего..." />
-            <button onClick={burnTask} disabled={busyAction === "task"}>{busyAction === "task" ? "Разбираю..." : "Разбить на микрошаги"}</button>
+            <div className="textarea-wrap">
+              <textarea value={taskText} onChange={(event) => setTaskText(event.target.value)} placeholder="Мам, мааочь начать уродливую, но важную задачу..." />
+              <Edit3 size={16} />
+            </div>
             {taskSteps.length > 0 && (
               <ol>
                 {taskSteps.map((step) => <li key={step}>{step}</li>)}
               </ol>
             )}
+            <button onClick={burnTask} disabled={busyAction === "task"}>
+              {busyAction === "task" ? "Разбиваю..." : "Разбить на микрошаги"}
+            </button>
           </section>
 
-          <section className="settings-card" id="settings">
-            <h3>Настройки учебного контекста</h3>
-            <div className="settings-grid">
-              <label>Тема<input value={settings.current_topic} onChange={(event) => setSettings({ ...settings, current_topic: event.target.value })} /></label>
-              <label>Задача<input value={settings.current_task} onChange={(event) => setSettings({ ...settings, current_task: event.target.value })} /></label>
-              <label>Дедлайн<input value={settings.deadline_text} onChange={(event) => setSettings({ ...settings, deadline_text: event.target.value })} /></label>
-              <label>Энергия: {settings.energy_score}/10<input type="range" min="0" max="10" value={settings.energy_score} onChange={(event) => setSettings({ ...settings, energy_score: Number(event.target.value) })} /></label>
+          <section className="mode-card rituals">
+            <div>
+              <h3>Ритуалы</h3>
+              <p>Маленькие привычки для фокуса и спокойствия каждый день. Короткая пауза без учебной вины. После неё можно вернуться к одному микрошагу.</p>
             </div>
-            <button onClick={saveSettings} disabled={busyAction === "settings"}>{busyAction === "settings" ? "Сохраняю..." : "Сохранить"}</button>
+            {activeRest && (
+              <div className="mini-timer">
+                <span>{activeRest.title}</span>
+                <FocusTimer minutes={activeRest.minutes} active />
+              </div>
+            )}
+            <button onClick={activeRest ? completeRest : startCatMode} disabled={busyAction === "cat" || busyAction === "rest-complete"}>
+              {activeRest ? "Завершить ритуал" : "Календарь ритуалов"}
+            </button>
+          </section>
+
+          <aside className="art-panel">
+            <img src={dreamscape} alt="Сонный котёнок рядом с учебником и чашкой" />
+          </aside>
+
+          <section className="step-card">
+            <h3><Flame size={18} /> Микрошаг дня</h3>
+            <p>Сосредоточься на текущей учебной задаче и попытайся выполнить как можно больше работы в течение 10 минут без отвлечений.</p>
+            <span className="duration-pill"><Timer size={15} /> 2-10 мин</span>
+            <button onClick={startFocus} className="primary-action" disabled={busyAction === "focus"}>
+              {busyAction === "focus" ? "Готовлю..." : "Сделать шаг"} <Check size={19} />
+            </button>
+          </section>
+
+          <section className="focus-card">
+            <h3><Timer size={18} /> Текущий фокус-раунд</h3>
+            <strong>{focusRound?.task_title || "Учебный раунд на 10 минут"}</strong>
+            <p>{focusRound?.task_text || "Сосредоточься на текущей учебной задаче и попытайся выполнить как можно больше работы в течение 10 минут без отвлечений."}</p>
+            {focusRound && (
+              <input value={focusResult} onChange={(event) => setFocusResult(event.target.value)} placeholder="Что получилось?" />
+            )}
+            <button onClick={focusRound ? completeFocus : startFocus} disabled={busyAction === "focus" || busyAction === "focus-complete"}>
+              {focusRound ? (microStepDone ? "Засчитано" : "Завершить") : "Запустить"}
+            </button>
+          </section>
+
+          <section className="mode-card anxiety">
+            <div>
+              <h3>Пожиратель тревоги</h3>
+              <p>Выгрузи тревогу — пусть она не съест силы и ночь.</p>
+            </div>
+            <div className="textarea-wrap">
+              <textarea value={anxietyText} onChange={(event) => setAnxietyText(event.target.value)} placeholder="Я всё завалю..." />
+              <Edit3 size={16} />
+            </div>
+            {anxietyResult && <p className="soft-result">{anxietyResult}</p>}
+            <button onClick={feedAnxiety} disabled={busyAction === "anxiety"}>
+              {busyAction === "anxiety" ? "Думаю..." : "Съесть тревогу"}
+            </button>
           </section>
         </div>
 
-        {focusRound && (
-          <section className="floating-focus">
-            <div>
-              <span>Текущий фокус-раунд</span>
-              <strong>{focusRound.task_title}</strong>
-              <p>{focusRound.task_text}</p>
-            </div>
-            <input value={focusResult} onChange={(event) => setFocusResult(event.target.value)} placeholder="Что получилось? Даже 1 вопрос считается." />
-            <button onClick={completeFocus}>{microStepDone ? "Засчитано" : "Завершить"}</button>
-          </section>
-        )}
-
         {ritualNote && (
           <div className="toast-note" role="status">
-            <Sparkles size={19} />
+            <Sparkles size={18} />
             <span>{ritualNote}</span>
           </div>
         )}
-
-        <footer>Ты важен. Ты справишься. Один день за раз.</footer>
       </section>
     </main>
   );

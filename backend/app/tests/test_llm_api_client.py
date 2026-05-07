@@ -29,3 +29,11 @@ def test_extracts_text_part_chat_completion_content():
 def test_rejects_empty_llm_response():
     with pytest.raises(RuntimeError):
         ApiLLMClient._extract_content_from_json({"choices": []})
+
+
+def test_rejects_non_ascii_api_key(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "твой_groq_api_key")
+    client = ApiLLMClient()
+
+    with pytest.raises(RuntimeError, match="LLM_API_KEY contains non-ASCII"):
+        client._authorization_header()
