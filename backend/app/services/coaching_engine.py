@@ -48,7 +48,7 @@ def _reply_for(mode: str, state: dict) -> str:
         return "Окей, ты отвлекся. Это не приговор и не доказательство лени. Давай без самобичевания: либо 30 секунд на один микрошаг, либо короткий отдых."
     if mode == "tiny_focus_round":
         return "Кажется, сил хватает на маленький старт. Можно попробовать 10 минут против часовых: одна понятная задача, без идеала и героизма."
-    return "Я рядом. Напиши честно, что сейчас с учебой: усталость, дедлайн, ступор, тревога. Здесь это можно сказать как есть."
+    return "Я рядом. Давай разберёмся мягко: что сейчас больше всего мешает - усталость, тревога, дедлайн или пустота в голове?"
 
 
 async def _maybe_llm_reply(db: Session, user_id: str, message: str, mode: str, emotional: dict, base_reply: str) -> str:
@@ -95,8 +95,10 @@ async def _maybe_llm_reply(db: Session, user_id: str, message: str, mode: str, e
             f"anxiety={emotional.get('anxiety_score')}, deadline={emotional.get('deadline_pressure')}, "
             f"readiness={emotional.get('study_readiness')}, overload={emotional.get('overload_score')}, "
             f"procrastination={emotional.get('procrastination_probability')}\n\n"
-            f"Черновик ответа (можно переформулировать и улучшить, но смысл сохрани):\n{base_reply}\n\n"
-            "Сформируй финальный ответ пользователю. Верни только текст ответа."
+            f"Черновик ответа (это только направление, не повторяй его дословно):\n{base_reply}\n\n"
+            "Сформируй финальный ответ пользователю. "
+            "Ответь именно на его фразу, особенно если она короткая вроде 'мне плохо' или 'мне нормально'. "
+            "Не начинай каждый ответ одинаково. Верни только текст ответа."
         )
         text = await client.generate_text(system_prompt=system_prompt, user_prompt=user_prompt, temperature=0.7)
         return soften_output(text.strip()) if text else base_reply

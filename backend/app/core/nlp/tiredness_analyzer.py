@@ -14,6 +14,8 @@ def analyze_tiredness(text: str) -> dict:
     procrastination = count_matches(text, PROCRASTINATION_WORDS)
     readiness = count_matches(text, READINESS_WORDS)
     lowered = text.lower()
+    has_bad_feeling = any(phrase in lowered for phrase in ["мне плохо", "очень плохо", "плохо"])
+    has_ok_feeling = any(phrase in lowered for phrase in ["мне нормально", "нормально", "в порядке"])
 
     tiredness_score = 0
     if tired >= 3:
@@ -28,6 +30,8 @@ def analyze_tiredness(text: str) -> dict:
         anxiety_score = 8
     elif anxiety == 1:
         anxiety_score = 5
+    if has_bad_feeling:
+        anxiety_score = max(anxiety_score, 7)
 
     deadline_pressure = 0
     has_deadline = any(word in lowered for word in ["дедлайн", "срок", "завтра", "через"])
@@ -38,6 +42,8 @@ def analyze_tiredness(text: str) -> dict:
 
     procrastination_probability = 8 if procrastination else 0
     study_readiness = 7 if readiness else 2
+    if has_ok_feeling:
+        study_readiness = max(study_readiness, 6)
     if tiredness_score >= 8 and anxiety_score >= 6:
         overload_score = 9
     else:
@@ -75,4 +81,3 @@ def analyze_tiredness(text: str) -> dict:
         "risk_flags": detect_risk(text),
         "short_reason": ", ".join(reasons) if reasons else "явных маркеров мало",
     }
-

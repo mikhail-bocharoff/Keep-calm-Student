@@ -16,3 +16,14 @@ def test_procrastination_high():
 def test_readiness_high():
     assert analyze_tiredness("я отдохнул и могу попробовать 10 минут")["study_readiness"] >= 5
 
+
+def test_bad_feeling_is_not_unknown():
+    state = analyze_tiredness("мне плохо")
+    assert state["anxiety_score"] >= 7
+    assert state["detected_intent"] == "anxious"
+
+
+def test_normal_feeling_can_start_gently():
+    state = analyze_tiredness("мне нормально")
+    assert state["study_readiness"] >= 5
+    assert state["detected_intent"] == "ready_to_study"
