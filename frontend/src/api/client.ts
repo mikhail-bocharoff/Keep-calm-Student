@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+export const API_URL = import.meta.env.VITE_BACKEND_URL || "https://keep-calm-student.onrender.com";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {

@@ -57,6 +57,8 @@ button:disabled {
   color: #3c386e;
   font-size: 22px;
   font-weight: 800;
+  padding: 24px;
+  text-align: center;
 }
 
 .orb-loader {
@@ -66,6 +68,39 @@ button:disabled {
   background: conic-gradient(from 160deg, #8d7cff, #62d49a, #ffd071, #ff8e9e, #8d7cff);
   animation: spin 1.8s linear infinite;
   box-shadow: 0 24px 70px rgba(112, 102, 210, 0.22);
+}
+
+.startup-error {
+  width: min(560px, calc(100vw - 32px));
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 18px 48px rgba(76, 87, 144, 0.16);
+  color: #343061;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.startup-error span {
+  overflow-wrap: anywhere;
+}
+
+.startup-error small {
+  color: rgba(52, 48, 97, 0.68);
+  font-weight: 750;
+}
+
+.startup-error button {
+  justify-self: center;
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 18px;
+  color: #ffffff;
+  background: #7b68ef;
+  font-weight: 900;
 }
 
 .aurora {

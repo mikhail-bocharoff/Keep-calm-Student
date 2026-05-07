@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { api, ChatMessage as Message } from "./api/client";
+import { API_URL, api, ChatMessage as Message } from "./api/client";
 import dreamscape from "./assets/otdohnii-dreamscape.png";
 import FocusTimer from "./components/FocusTimer";
 
@@ -77,6 +77,7 @@ export default function App() {
   const [isSending, setIsSending] = useState(false);
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
+  const [startupError, setStartupError] = useState("");
   const [activeRest, setActiveRest] = useState<{ ritualId?: string; title: string; minutes: number } | null>(null);
   const [musicEnabled, setMusicEnabled] = useState(false);
   const audioRef = useRef<{ context: AudioContext; oscillator: OscillatorNode; gain: GainNode } | null>(null);
@@ -93,12 +94,28 @@ export default function App() {
 
   useEffect(() => {
     if (!userId) {
-      api.createUser().then((user) => {
-        localStorage.setItem("otdohnii_user_id", user.user_id);
-        setUserId(user.user_id);
-      });
+      api.createUser()
+        .then((user) => {
+          localStorage.setItem("otdohnii_user_id", user.user_id);
+          setUserId(user.user_id);
+          setStartupError("");
+        })
+        .catch(() => {
+          setStartupError(`Не получается подключиться к backend: ${API_URL}`);
+        });
     }
   }, [userId]);
+
+  async function retryStartup() {
+    setStartupError("");
+    try {
+      const user = await api.createUser();
+      localStorage.setItem("otdohnii_user_id", user.user_id);
+      setUserId(user.user_id);
+    } catch {
+      setStartupError(`Backend всё ещё недоступен: ${API_URL}`);
+    }
+  }
 
   useEffect(() => {
     if (!userId) return;
@@ -319,7 +336,14 @@ export default function App() {
     return (
       <main className="loading-screen">
         <div className="orb-loader" />
-        <p>Готовлю мягкий старт...</p>
+        <p>{startupError ? "Старт пока не получился" : "Готовлю мягкий старт..."}</p>
+        {startupError && (
+          <div className="startup-error">
+            <span>{startupError}</span>
+            <small>Проверь, что backend на Render задеплоен, отвечает на /api/health и пускает Vercel-домен.</small>
+            <button onClick={retryStartup}>Повторить</button>
+          </div>
+        )}
       </main>
     );
   }
