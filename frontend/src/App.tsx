@@ -14,6 +14,7 @@ import {
   Star,
   Timer,
   Trophy,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -37,6 +38,29 @@ const initialMessages: Message[] = [
 ];
 
 const moodChips = ["Устал", "Тревожно", "Туплю", "Не успеваю", "Спокойно"];
+
+const focusMusicLinks = {
+  rap: {
+    label: "РЭП",
+    icon: "🎤",
+    url: "https://music.yandex.ru/playlists/ge.2fc9567f-30ed-4a7e-8c22-63570cdce155",
+  },
+  aiMusic: {
+    label: "ИИмузыка",
+    icon: "🤖",
+    url: "https://music.yandex.ru/artist/19339609",
+  },
+  rock: {
+    label: "Рок",
+    icon: "🎸",
+    url: "https://music.yandex.ru/playlists/433927e7-9455-ac34-f0d2-8385d274f7b0",
+  },
+  relaxCats: {
+    label: "Релакс котики",
+    icon: "🐾",
+    url: "https://music.yandex.ru/playlists/13bc0378-46d8-7ac0-b70c-72235db98969",
+  },
+} as const;
 
 function StatLine({ icon, label, value, color }: { icon: ReactNode; label: string; value: string; color: string }) {
   return (
@@ -79,8 +103,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [startupError, setStartupError] = useState("");
   const [activeRest, setActiveRest] = useState<{ ritualId?: string; title: string; minutes: number } | null>(null);
-  const [musicEnabled, setMusicEnabled] = useState(false);
-  const audioRef = useRef<{ context: AudioContext; oscillator: OscillatorNode; gain: GainNode } | null>(null);
+  const [isMusicModalOpen, setIsMusicModalOpen] = useState(false);
+  const musicButtonRef = useRef<HTMLButtonElement | null>(null);
+  const musicModalRef = useRef<HTMLDivElement | null>(null);
   const [settings, setSettings] = useState({
     current_topic: "Макроэкономика: инфляция",
     current_task: "Подготовиться к семинару",
@@ -133,13 +158,19 @@ export default function App() {
   }, [userId]);
 
   useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.oscillator.stop();
-        audioRef.current.context.close();
+    if (!isMusicModalOpen) return;
+
+    musicModalRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMusicModal();
       }
-    };
-  }, []);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMusicModalOpen]);
 
   const energy = emotionalState ? Math.max(8, 100 - emotionalState.overload_score * 9) : 68;
   const restMinutes = progress ? Math.min(60, progress.completed_rituals * 15) : 45;
@@ -302,34 +333,28 @@ export default function App() {
     }
   }
 
-  function toggleAmbientFocus() {
-    if (audioRef.current) {
-      audioRef.current.oscillator.stop();
-      audioRef.current.context.close();
-      audioRef.current = null;
-      setMusicEnabled(false);
-      showNote("Фоновый звук выключен.");
-      return;
-    }
+  function openMusicModal() {
+    setIsMusicModalOpen(true);
+  }
 
-    const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtor) {
-      showNote("Браузер не поддерживает встроенный фоновый звук.");
-      return;
-    }
+  function closeMusicModal() {
+    setIsMusicModalOpen(false);
+    window.setTimeout(() => musicButtonRef.current?.focus(), 0);
+  }
 
-    const context = new AudioCtor();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = 174;
-    gain.gain.value = 0.035;
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    audioRef.current = { context, oscillator, gain };
-    setMusicEnabled(true);
-    showNote("Включил тихий фоновый тон для фокуса. Его можно выключить той же кнопкой.");
+  function openFocusMusic(style: keyof typeof focusMusicLinks) {
+    const item = focusMusicLinks[style];
+    try {
+      window.open(item.url, "_blank", "noopener,noreferrer");
+      setIsMusicModalOpen(false);
+      showNote("Плейлист открылся в браузере.");
+      window.setTimeout(() => musicButtonRef.current?.focus(), 0);
+    } catch (musicError) {
+      console.error("Failed to open Yandex Music link", musicError);
+      setIsMusicModalOpen(false);
+      showNote("Не получилось открыть Яндекс Музыку. Попробуй ещё раз.");
+      window.setTimeout(() => musicButtonRef.current?.focus(), 0);
+    }
   }
 
   if (!userId) {
@@ -506,7 +531,14 @@ export default function App() {
             <button onClick={burnTask}><Flame /> Сжечь задачу <small>выплесни напряжение</small></button>
             <button onClick={() => startShortRest(3, "Короткая медитация")}><Leaf /> Короткая медитация <small>3 минуты тишины</small></button>
             <button onClick={startFocus}><Star /> Правило 1% <small>сделай чуть-чуть</small></button>
-            <button onClick={toggleAmbientFocus}><Music /> Музыка для фокуса <small>{musicEnabled ? "выключить фон" : "включить тихий фон"}</small></button>
+            <button
+              ref={musicButtonRef}
+              onClick={openMusicModal}
+              aria-haspopup="dialog"
+              aria-expanded={isMusicModalOpen}
+            >
+              <Music /> Музыка для фокуса <small>включить тихий фон</small>
+            </button>
           </section>
 
           <section className="focus-card">
@@ -566,6 +598,43 @@ export default function App() {
           <div className="toast-note" role="status">
             <Sparkles size={19} />
             <span>{ritualNote}</span>
+          </div>
+        )}
+
+        {isMusicModalOpen && (
+          <div className="music-modal-backdrop" onMouseDown={(event) => event.currentTarget === event.target && closeMusicModal()}>
+            <section
+              ref={musicModalRef}
+              className="music-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="music-modal-title"
+              aria-describedby="music-modal-description"
+              tabIndex={-1}
+            >
+              <button className="music-modal-close" onClick={closeMusicModal} aria-label="Закрыть выбор музыки">
+                <X size={22} />
+              </button>
+              <div className="music-modal-copy">
+                <h2 id="music-modal-title">Выбери музыку для фокуса</h2>
+                <p id="music-modal-description">Откроем Яндекс Музыку в браузере. Выбирай настроение — приложение останется здесь.</p>
+              </div>
+              <div className="music-options">
+                {Object.entries(focusMusicLinks).map(([key, item]) => (
+                  <button
+                    key={key}
+                    onClick={() => openFocusMusic(key as keyof typeof focusMusicLinks)}
+                    aria-label={`Открыть Яндекс Музыку: ${item.label}`}
+                  >
+                    <span>{item.icon}</span>
+                    <strong>{item.label}</strong>
+                  </button>
+                ))}
+              </div>
+              <button className="music-modal-cancel" onClick={closeMusicModal}>
+                Отмена
+              </button>
+            </section>
           </div>
         )}
 
