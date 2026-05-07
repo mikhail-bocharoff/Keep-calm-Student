@@ -24,7 +24,7 @@ class ApiLLMClient(LLMClient):
 
         headers = {"Content-Type": "application/json"}
         if self.settings.llm_api_key:
-            headers["Authorization"] = self._authorization_header()
+            headers["Authorization"] = f"Bearer {self.settings.llm_api_key}"
 
         payload = {
             "model": self.settings.llm_model_name,
@@ -76,18 +76,6 @@ class ApiLLMClient(LLMClient):
             body = e.response.text[:1200]
             raise RuntimeError(f"LLM HTTP error {e.response.status_code}: {body}") from e
         return self._extract_content_from_json(response.json())
-
-    def _authorization_header(self) -> str:
-        api_key = self.settings.llm_api_key.strip()
-        try:
-            api_key.encode("ascii")
-        except UnicodeEncodeError as exc:
-            raise RuntimeError(
-                "LLM_API_KEY contains non-ASCII characters. "
-                "Put the real provider key in Render env, for example a Groq key starting with 'gsk_', "
-                "not a placeholder like 'твой_groq_api_key'."
-            ) from exc
-        return f"Bearer {api_key}"
 
     @staticmethod
     def _extract_content_from_json(data: dict) -> str:
