@@ -100,8 +100,14 @@ async def _maybe_llm_reply(db: Session, user_id: str, message: str, mode: str, e
         )
         text = await client.generate_text(system_prompt=system_prompt, user_prompt=user_prompt, temperature=0.7)
         return soften_output(text.strip()) if text else base_reply
-    except Exception:
+    except Exception as exc:
         logger.exception("LLM reply generation failed; falling back to rule-based reply")
+        if get_settings().llm_mode.lower() in {"api", "local"}:
+            return (
+                "Я вижу сообщение, но нейросетевой ответ сейчас не прошёл. "
+                "Проверь `/api/health/llm`: там будет точная ошибка провайдера без раскрытия ключа. "
+                f"Пока коротко: {base_reply}"
+            )
         return base_reply
 
 
